@@ -1,6 +1,6 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs").promises;
-const XLSX = require('xlsx');
+const XLSX = require("xlsx");
 
 class ForumDonationScraper {
   constructor(baseUrl, options = {}) {
@@ -243,7 +243,7 @@ class ForumDonationScraper {
           url += `?start=${startValue}`;
         }
       }
-      console.debug(`Navigating to ${url}`)
+      console.debug(`Navigating to ${url}`);
       await page.goto(url, { waitUntil: "networkidle2" });
       await page.waitForTimeout(this.options.delay);
     } catch (error) {
@@ -283,40 +283,16 @@ class ForumDonationScraper {
       const totalPages = await this.getTotalPages(page);
       console.log(`Total pages to scrape: ${totalPages}`);
 
-      // Scrape all pages
+      // Scrape all pages sequentially using only one page
       this.donations = [];
-      // Prepare all page numbers
-      const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+      const pageDonations = await this.extractDonationsFromPage(page);
+      this.donations.push(...pageDonations);
 
-      // Map to promises for parallel extraction
-      const browserPages = await Promise.all(
-        pageNumbers.map(() => browser.newPage())
-      );
-
-      // Set user agent for all pages
-      await Promise.all(
-        browserPages.map((p) =>
-          p.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-          )
-        )
-      );
-
-      // Navigate all pages in parallel
-      await Promise.all(
-        browserPages.map((p, idx) => this.navigateToPage(p, pageNumbers[idx]))
-      );
-
-      // Extract donations in parallel
-      const allDonations = await Promise.all(
-        browserPages.map((p) => this.extractDonationsFromPage(p))
-      );
-
-      // Flatten and collect
-      this.donations = allDonations.flat();
-
-      // Close all pages except the first one (which will be closed in finally)
-      await Promise.all(browserPages.map((p) => p.close()));
+      for (let pageNum = 2; pageNum <= totalPages; pageNum++) {
+        await this.navigateToPage(page, pageNum);
+        const pageDonations = await this.extractDonationsFromPage(page);
+        this.donations.push(...pageDonations);
+      }
 
       // Sort donations by date and time
       this.donations.sort((a, b) => {
