@@ -1,0 +1,16 @@
+{
+  "name": "donation-parser-bot",
+  "version": "1.0.0",
+  "description": "Forum donation scraper and Telegram bot.",
+  "main": "telegram_bot.js",
+  "scripts": {
+    "start": "node telegram_bot.js",
+    "scrape": "node forum_donation_scraper.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-telegram-bot-api": "^0.61.0",
+    "puppeteer": "^21.3.8",
+    "xlsx": "^0.18.5"
+  }
+}
