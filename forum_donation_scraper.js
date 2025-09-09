@@ -243,7 +243,7 @@ class ForumDonationScraper {
           url += `?start=${startValue}`;
         }
       }
-
+      console.debug(`Navigating to ${url}`)
       await page.goto(url, { waitUntil: "networkidle2" });
       await page.waitForTimeout(this.options.delay);
     } catch (error) {
