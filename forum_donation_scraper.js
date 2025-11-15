@@ -262,14 +262,40 @@ class ForumDonationScraper {
       return this.donations;
     }
 
-    const browser = await puppeteer.launch({
+    // Prepare launch options with configurable timeout and diagnostics
+    const launchOptions = {
       headless: this.options.headless === true ? "new" : this.options.headless,
       defaultViewport: { width: 1920, height: 1080 },
       args: ["--no-sandbox", "--disable-setuid-sandbox"], // For server environments
-    });
+      // Increase launch timeout (ms). Default 30000. Use 0 to disable timeout.
+      timeout: this.options.launchTimeout ?? 60000,
+      // When true, pipes Chromium stdout/stderr to process for easier debugging of WS endpoint issues
+      dumpio: this.options.dumpio === true || false,
+    };
+
+    // Allow explicit executablePath (useful in some environments)
+    if (this.options.executablePath) {
+      launchOptions.executablePath = this.options.executablePath;
+    }
+
+    const browser = await puppeteer.launch(launchOptions);
 
     try {
+
       const page = await browser.newPage();
+
+      // Set default navigation and general timeouts (ms). Can be customized via options.
+      const defaultNavTimeout =
+        typeof this.options.defaultNavigationTimeout === "number"
+          ? this.options.defaultNavigationTimeout
+          : 600000; // 600s
+      const defaultTimeout =
+        typeof this.options.defaultTimeout === "number"
+          ? this.options.defaultTimeout
+          : 600000; // 600s
+
+      page.setDefaultNavigationTimeout(defaultNavTimeout);
+      page.setDefaultTimeout(defaultTimeout);
 
       // Set user agent to avoid being blocked
       await page.setUserAgent(
