@@ -244,7 +244,7 @@ class ForumDonationScraper {
         }
       }
       console.debug(`Navigating to ${url}`);
-      await page.goto(url, { waitUntil: "networkidle2" });
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 600000 });
       await page.waitForTimeout(this.options.delay);
     } catch (error) {
       console.error(`Error navigating to page ${pageNumber}:`, error.message);
