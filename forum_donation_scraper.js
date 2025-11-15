@@ -302,6 +302,24 @@ class ForumDonationScraper {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       );
 
+      // Optionally block resource types to speed up scraping and reduce bandwidth
+      const blockedResourceTypes = [];
+      if (this.options.blockImages) blockedResourceTypes.push("image");
+      if (this.options.blockScripts) blockedResourceTypes.push("script");
+      if (this.options.blockStyles) blockedResourceTypes.push("stylesheet");
+      if (this.options.blockFonts) blockedResourceTypes.push("font");
+
+      if (blockedResourceTypes.length > 0) {
+        await page.setRequestInterception(true);
+        page.on("request", (req) => {
+          const resourceType = req.resourceType();
+          if (blockedResourceTypes.includes(resourceType)) {
+            return req.abort();
+          }
+          return req.continue();
+        });
+      }
+
       // Navigate to first page
       await this.navigateToPage(page, 1);
 
@@ -486,6 +504,10 @@ async function processTelegramRequest(
       scraperInstance = new ForumDonationScraper(forumUrl, {
         headless: true,
         delay: 1000,
+        blockImages: true,
+        blockScripts: true,
+        blockStyles: true,
+        blockFonts: true,
         ...options,
       });
     }
