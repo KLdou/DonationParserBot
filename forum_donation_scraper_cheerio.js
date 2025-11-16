@@ -1,4 +1,7 @@
 const fs = require("fs").promises;
+const http = require("http");
+const https = require("https");
+const dns = require("dns");
 const XLSX = require("xlsx");
 const axios = require("axios");
 const cheerio = require("cheerio");
@@ -12,10 +15,20 @@ class ForumDonationScraper {
       cacheTtl: options.cacheTtl || 1800000,
       userAgent: options.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
       timeout: options.timeout || 30000,
+      maxRetries: options.maxRetries || 3,
       ...options,
     };
     this.donations = [];
     this._cache = { donations: null, timestamp: 0, xlsx: null };
+    const ipv4Lookup = options.lookup || ((hostname, opts, cb) => {
+      if (typeof opts === "function") {
+        dns.lookup(hostname, { family: 4, all: false }, opts);
+        return;
+      }
+      dns.lookup(hostname, { ...(opts || {}), family: 4, all: false }, cb);
+    });
+    this.httpAgent = new http.Agent({ keepAlive: true, lookup: ipv4Lookup });
+    this.httpsAgent = new https.Agent({ keepAlive: true, lookup: ipv4Lookup });
   }
 
   parseDonationMessage(messageText) {
@@ -62,12 +75,38 @@ class ForumDonationScraper {
 
   async fetchPageHtml(pageNumber) {
     const url = this.buildPageUrl(pageNumber);
-    const res = await axios.get(url, {
-      timeout: this.options.timeout,
-      headers: { "User-Agent": this.options.userAgent, Accept: "text/html" },
-    });
-    if (this.options.delay) await new Promise((r) => setTimeout(r, this.options.delay));
-    return res.data;
+    const retriableCodes = new Set(["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"]);
+    let attemptError = null;
+    for (let attempt = 1; attempt <= this.options.maxRetries; attempt++) {
+      try {
+        const res = await axios.get(url, {
+          timeout: this.options.timeout,
+          headers: {
+            "User-Agent": this.options.userAgent,
+            Accept: "text/html",
+            Connection: "keep-alive",
+          },
+          httpAgent: this.httpAgent,
+          httpsAgent: this.httpsAgent,
+          responseType: "text",
+        });
+        if (this.options.delay) await new Promise((r) => setTimeout(r, this.options.delay));
+        return res.data;
+      } catch (error) {
+        attemptError = error;
+        const code = error.code || (error.cause && error.cause.code);
+        const message = error.message || "";
+        const retriable = retriableCodes.has(code) || message.includes("socket hang up");
+        if (attempt === this.options.maxRetries || !retriable) {
+          const friendlyMessage = `Не удалось загрузить страницу форума (страница ${pageNumber}). ${message || code || "Неизвестная ошибка"}`;
+          const finalError = new Error(friendlyMessage);
+          finalError.code = code;
+          throw finalError;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
+    throw attemptError || new Error("Неизвестная ошибка загрузки страницы");
   }
 
   determineTotalPages(html) {
@@ -215,7 +254,19 @@ async function processTelegramRequest(forumUrl, searchTermsString, options = {})
 async function saveXLSXForTelegram(xlsxContent, filename = null) {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const fileName = `${filename}.xlsx` || `donations_${timestamp}.xlsx`;
+    const safeBaseName = filename
+      ? filename
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .join("_")
+          .replace(/[<>:"/\\|?*]+/g, "_")
+          .replace(/\s+/g, " ")
+          .trim()
+      : null;
+    const fileName = safeBaseName && safeBaseName.length
+      ? `${safeBaseName}.xlsx`
+      : `donations_${timestamp}.xlsx`;
     const filePath = `./temp/${fileName}`;
     await fs.mkdir("./temp", { recursive: true });
     XLSX.writeFile(xlsxContent, filePath);
