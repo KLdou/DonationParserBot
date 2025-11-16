@@ -1,7 +1,6 @@
 const fs = require("fs").promises;
 const http = require("http");
 const https = require("https");
-const dns = require("dns");
 const XLSX = require("xlsx");
 const axios = require("axios");
 const cheerio = require("cheerio");
@@ -20,15 +19,8 @@ class ForumDonationScraper {
     };
     this.donations = [];
     this._cache = { donations: null, timestamp: 0, xlsx: null };
-    const ipv4Lookup = options.lookup || ((hostname, opts, cb) => {
-      if (typeof opts === "function") {
-        dns.lookup(hostname, { family: 4, all: false }, opts);
-        return;
-      }
-      dns.lookup(hostname, { ...(opts || {}), family: 4, all: false }, cb);
-    });
-    this.httpAgent = new http.Agent({ keepAlive: true, lookup: ipv4Lookup });
-    this.httpsAgent = new https.Agent({ keepAlive: true, lookup: ipv4Lookup });
+    this.httpAgent = new http.Agent({ keepAlive: true });
+    this.httpsAgent = new https.Agent({ keepAlive: true });
   }
 
   parseDonationMessage(messageText) {
