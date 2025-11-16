@@ -6,10 +6,9 @@ const TelegramBot = require("node-telegram-bot-api");
 const path = require("path");
 const {
   processTelegramRequest,
-  saveCSVForTelegram,
   saveXLSXForTelegram,
   cleanupTempFiles,
-} = require("./forum_donation_scraper");
+} = require("./forum_donation_scraper_cheerio");
 
 // Replace with your actual Telegram bot token
 const TELEGRAM_BOT_TOKEN =
