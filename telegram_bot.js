@@ -21,13 +21,36 @@ if (TELEGRAM_BOT_TOKEN === "YOUR_TELEGRAM_BOT_TOKEN_HERE") {
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-// Command: /donations <search_terms>
+// Forum URLs by year
+const FORUM_URLS = {
+  2025: "https://forum.zooshans.by/viewtopic.php?f=15&t=54158",
+  2026: "https://forum.zooshans.by/viewtopic.php?f=15&t=56081",
+};
+const DEFAULT_YEAR = 2026;
+
+// Command: /donations [year] <search_terms>
 bot.onText(/\/donations (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
-  const searchTerms = match[1].trim();
-  const forumUrl = "https://forum.zooshans.by/viewtopic.php?f=15&t=54158";
+  const input = match[1].trim();
+  
+  // Check if first word is a year (2025 or 2026)
+  const parts = input.split(/\s+/);
+  let year = DEFAULT_YEAR;
+  let searchTerms = input;
+  
+  if (parts[0] === "2025" || parts[0] === "2026") {
+    year = parseInt(parts[0]);
+    searchTerms = parts.slice(1).join(" ");
+  }
+  
+  if (!searchTerms) {
+    bot.sendMessage(chatId, "❌ Пожалуйста, укажите поисковые слова после года.");
+    return;
+  }
+  
+  const forumUrl = FORUM_URLS[year];
 
-  bot.sendMessage(chatId, "🔄 Собираю данные, пожалуйста, подождите...");
+  bot.sendMessage(chatId, `🔄 Собираю данные за ${year} год, пожалуйста, подождите...`);
 
   try {
     const result = await processTelegramRequest(forumUrl, searchTerms);
@@ -76,10 +99,15 @@ bot.onText(/\/start|\/help/, (msg) => {
     `👋 Я бот для сбора пожертвований с форума!
 
 Использование:
-/donations <поисковые_слова>
+/donations [год] <поисковые_слова>
 
-Пример:
+Примеры:
 /donations лошади,сено
+/donations 2025 лошади,сено
+/donations 2026 кошки
+
+Поддерживаемые года: 2025, 2026
+По умолчанию используется 2026 год.
 
 Я скачаю пожертвования, отфильтрую по комментариям и пришлю отчет в XLSX.`
   );
