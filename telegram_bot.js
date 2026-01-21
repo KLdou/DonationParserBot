@@ -19,7 +19,16 @@ if (TELEGRAM_BOT_TOKEN === "YOUR_TELEGRAM_BOT_TOKEN_HERE") {
   process.exit(1);
 }
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+// Оптимизация polling для слабого VPS
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { 
+  polling: {
+    interval: 2000,        // Проверка каждые 2 секунды (вместо 300ms по умолчанию)
+    autoStart: true,
+    params: {
+      timeout: 10          // Long polling timeout (секунды)
+    }
+  }
+});
 
 // Forum URLs by year
 const FORUM_URLS = {
@@ -114,3 +123,41 @@ bot.onText(/\/start|\/help/, (msg) => {
 });
 
 console.log("Telegram bot started!");
+
+// Graceful shutdown для освобождения ресурсов на слабом VPS
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Получен сигнал остановки (SIGINT), завершаю работу...');
+  try {
+    await bot.stopPolling();
+    await cleanupTempFiles();
+    console.log('✅ Бот корректно остановлен');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Ошибка при остановке:', error);
+    process.exit(1);
+  }
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Получен сигнал остановки (SIGTERM), завершаю работу...');
+  try {
+    await bot.stopPolling();
+    await cleanupTempFiles();
+    console.log('✅ Бот корректно остановлен');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Ошибка при остановке:', error);
+    process.exit(1);
+  }
+});
+
+// Обработка необработанных ошибок
+process.on('uncaughtException', (error) => {
+  console.error('❌ Необработанное исключение:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Необработанный reject промиса:', reason);
+});
+

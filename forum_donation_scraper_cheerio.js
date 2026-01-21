@@ -19,8 +19,21 @@ class ForumDonationScraper {
     };
     this.donations = [];
     this._cache = { donations: null, timestamp: 0, xlsx: null };
-    this.httpAgent = new http.Agent({ keepAlive: true });
-    this.httpsAgent = new https.Agent({ keepAlive: true });
+    // Ограничение соединений для слабого VPS
+    this.httpAgent = new http.Agent({ 
+      keepAlive: true,
+      maxSockets: 2,           // Максимум 2 одновременных соединения
+      maxFreeSockets: 1,       // Не держать много свободных сокетов
+      timeout: 60000,          // Таймаут для неактивных сокетов
+      keepAliveMsecs: 30000    // Keep-alive интервал
+    });
+    this.httpsAgent = new https.Agent({ 
+      keepAlive: true,
+      maxSockets: 2,
+      maxFreeSockets: 1,
+      timeout: 60000,
+      keepAliveMsecs: 30000
+    });
   }
 
   parseDonationMessage(messageText) {
@@ -144,6 +157,10 @@ class ForumDonationScraper {
         }
       });
     });
+    
+    // Освобождаем Cheerio объект из памяти
+    $.root().empty();
+    
     return results;
   }
 
@@ -157,18 +174,41 @@ class ForumDonationScraper {
     const totalPages = this.determineTotalPages(firstHtml);
     const effectivePages = this.options.maxPages ? Math.min(totalPages, this.options.maxPages) : totalPages;
     this.donations = this.extractDonationsFromHtml(firstHtml);
+    
+    // Освобождаем память после обработки первой страницы
+    let firstHtmlSize = Buffer.byteLength(firstHtml, 'utf8');
+    
     for (let pageNum = 2; pageNum <= effectivePages; pageNum++) {
       const html = await this.fetchPageHtml(pageNum);
       this.donations.push(...this.extractDonationsFromHtml(html));
+      
+      // Явно освобождаем память после каждой страницы
+      if (global.gc && pageNum % 5 === 0) {
+        global.gc();
+      }
     }
+    
     this.donations.sort((a, b) => {
       const dateA = new Date(a.dateTime.replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1"));
       const dateB = new Date(b.dateTime.replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1"));
       return dateA - dateB;
     });
-    this._cache.donations = this.donations;
-    this._cache.timestamp = Date.now();
-    this._cache.xlsx = this.generateXLSX(this.donations);
+    
+    // Ограничиваем размер кэша: не кэшируем если данных слишком много
+    const donationsSize = JSON.stringify(this.donations).length;
+    const MAX_CACHE_SIZE = 5 * 1024 * 1024; // 5MB лимит для кэша
+    
+    if (donationsSize < MAX_CACHE_SIZE) {
+      this._cache.donations = this.donations;
+      this._cache.timestamp = Date.now();
+      this._cache.xlsx = this.generateXLSX(this.donations);
+    } else {
+      // Если данных много - не кэшируем, освобождаем старый кэш
+      this._cache.donations = null;
+      this._cache.xlsx = null;
+      this._cache.timestamp = 0;
+    }
+    
     return this.donations;
   }
 
