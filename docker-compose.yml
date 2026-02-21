@@ -1,0 +1,27 @@
+services:
+  donation-bot:
+    # Используем твой собранный образ из GHCR
+    image: ghcr.io/kldou/donation-parser-bot:latest
+    container_name: donation-parser-bot
+    restart: unless-stopped
+    
+    # Подключаем переменные окружения из файла .env, 
+    # который должен лежать рядом с этим docker-compose.yml
+    env_file:
+      - .env
+      
+    # Защита VPS от нехватки памяти (OOM) при тяжелом парсинге
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'      # Бот не заберет больше 50% процессора
+          memory: 300M     # Бот не съест больше 300 МБ оперативки
+        reservations:
+          memory: 100M     # Гарантированный минимум для старта Node.js
+          
+    # Защита диска VPS от переполнения логами
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,40 @@
+name: Build and Push Docker Image
+
+# 1. Указываем триггер (когда запускать этот скрипт)
+on:
+  push:
+    branches:
+      - master # Запуск при каждом пуше в ветку main (или master, если она у тебя так называется)
+
+# 2. Выдаем права скрипту на запись готового образа в твой профиль
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest # Просим у GitHub сервер на базе Ubuntu
+
+    steps:
+      # Шаг 1: Скрипт скачивает твой код из репозитория на этот сервер
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Шаг 2: Скрипт авторизуется в твоем реестре (GHCR)
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Магия GitHub: этот токен генерируется автоматически на время сборки,
+          # тебе НЕ нужно создавать его вручную в настройках
+          password: ${{ secrets.GITHUB_TOKEN }} 
+
+      # Шаг 3: Сборка и отправка (Push) готового образа
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Автоматически подставляем твой логин и задаем имя образу
+          tags: ghcr.io/kldou/donation-parser-bot:latest
